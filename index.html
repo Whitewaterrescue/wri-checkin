@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WRI Staff Check-In</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3A3C3C">
+  <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <p id="loadingText">Loading...</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SCREEN 1: CHECK-IN FORM
+       ═══════════════════════════════════════════════════════ -->
+  <div id="screen-checkin" class="screen">
+    <div class="signin-container">
+      <div class="signin-logo">
+        <img src="assets/wri-logo.png" alt="WRI" style="height:32px;" onerror="this.outerHTML='<span style=font-size:20px;font-weight:700;color:#EC2329>WRI</span>'">
+        <div class="logo-sub">Staff Check-In</div>
+      </div>
+
+      <div class="signin-incident" id="incidentBox" style="display:none;">
+        <div class="label">Active Incident</div>
+        <div class="name" id="checkinIncidentName"></div>
+      </div>
+
+      <form id="checkinForm" autocomplete="off">
+        <div class="checkbox-group" style="background:rgba(236,35,41,0.15);padding:12px;border-radius:8px;border:1px solid var(--accent);margin-bottom:16px;">
+          <input type="checkbox" id="ciSafetyBriefing" required>
+          <label for="ciSafetyBriefing" style="font-weight:600;">I have received or will receive a safety briefing before beginning work</label>
+        </div>
+        <div class="form-group">
+          <label for="ciName">Full Name</label>
+          <input type="text" id="ciName" list="nameList" placeholder="Start typing your name..." required>
+          <datalist id="nameList"></datalist>
+        </div>
+        <div class="form-group">
+          <label for="ciRole">ICS Position</label>
+          <input type="text" id="ciRole" list="roleList" placeholder="Start typing position...">
+          <datalist id="roleList"></datalist>
+        </div>
+        <div class="form-group">
+          <label for="ciCompany">Company / Organization</label>
+          <input type="text" id="ciCompany" list="companyList" placeholder="e.g. WRI" required>
+          <datalist id="companyList"></datalist>
+        </div>
+        <div class="form-group">
+          <label for="ciLocation">Check-In Location</label>
+          <input type="text" id="ciLocation" list="locationList" placeholder="e.g. ICP, Staging Area A" required>
+          <datalist id="locationList"></datalist>
+        </div>
+        <div class="form-group">
+          <label for="ciPhone">Phone</label>
+          <input type="tel" id="ciPhone" placeholder="(555) 555-1234">
+        </div>
+        <div class="form-group">
+          <label for="ciEmail">Email</label>
+          <input type="email" id="ciEmail" placeholder="you@whitewaterrescue.com">
+        </div>
+        <div class="form-group">
+          <label for="ciWorkDesc">Work Description</label>
+          <textarea id="ciWorkDesc" placeholder="Brief description of your tasks"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="ciTimestamp">Check-In Time</label>
+          <input type="datetime-local" id="ciTimestamp">
+        </div>
+        <div class="checkbox-group" id="ciCertToggleWrap">
+          <input type="checkbox" id="ciCertToggle">
+          <label for="ciCertToggle">Include my certifications with this check-in</label>
+        </div>
+        <div id="ciCertSection" style="display:none;border:1px solid var(--border);border-radius:6px;background:var(--panel);padding:12px;margin-bottom:12px">
+          <div id="ciCertPrefilledMsg" style="display:none;font-size:12px;color:#0a8043;margin-bottom:8px;font-style:italic"></div>
+          <div id="ciCertLoading" style="font-size:12px;color:#666;font-style:italic;padding:6px 0">Loading certifications…</div>
+          <div id="ciCertList"></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="checkinBtn">
+          Check In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SCREEN 2: CHECKED-IN STATUS
+       ═══════════════════════════════════════════════════════ -->
+  <div id="screen-status" class="screen">
+    <div class="resume-container">
+      <div class="resume-avatar" id="statusAvatar">S</div>
+      <h2 id="statusWelcome">Checked In</h2>
+
+      <div class="resume-details">
+        <div class="detail-row">
+          <span class="detail-label">Location</span>
+          <span class="detail-value" id="statusLocation"></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Checked in</span>
+          <span class="detail-value" id="statusSince"></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Time on site</span>
+          <span class="detail-value" id="statusElapsed"></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Position</span>
+          <span class="detail-value" id="statusRole"></span>
+        </div>
+      </div>
+
+      <button class="btn btn-danger btn-block mb-16" onclick="showCheckoutOverlay()">
+        Check Out
+      </button>
+      <button class="link-btn" onclick="checkOutAndSwitch()">
+        Check out &amp; sign in as someone else
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SCREEN 3: THANK YOU
+       ═══════════════════════════════════════════════════════ -->
+  <div id="screen-thankyou" class="screen">
+    <div class="thankyou-container">
+      <div class="thankyou-check">&#10003;</div>
+      <h1>Checked Out</h1>
+      <p class="text-muted mt-12" id="tyMessage">You have been checked out.</p>
+
+      <div class="thankyou-stats">
+        <div class="stat-row">
+          <span class="stat-label">Checked In</span>
+          <span class="stat-value" id="tyCheckinTime"></span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Checked Out</span>
+          <span class="stat-value" id="tyCheckoutTime"></span>
+        </div>
+      </div>
+
+      <button class="btn btn-secondary btn-block mt-16" onclick="restartApp()">
+        Check in
+      </button>
+    </div>
+  </div>
+
+  <!-- CHECK-OUT CONFIRM OVERLAY -->
+  <div id="checkoutOverlay" class="overlay">
+    <div class="overlay-card">
+      <h2>Check Out?</h2>
+      <p>This ends your time on site for today.</p>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="hideCheckoutOverlay()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmCheckOut()">Check Out</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/session.js"></script>
+  <script src="js/outbox.js"></script>
+  <script src="js/screens.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
