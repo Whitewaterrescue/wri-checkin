@@ -114,6 +114,37 @@
     } catch (e) {}
   };
 
+  // The widget's OWN state key (wri_checkin_state) — github.io is one
+  // origin, so this page can write it directly. postMessage updates a
+  // MOUNTED widget; the localStorage write makes the pill correct on the
+  // widget's NEXT mount (covers standalone check-ins and drains that land
+  // while the Field App is closed — the widget has no storage listener).
+  var WIDGET_STATE_KEY = 'wri_checkin_state';
+  function setWidgetState(name, sinceIso, location) {
+    try {
+      localStorage.setItem(WIDGET_STATE_KEY, JSON.stringify({
+        name: String(name || ''), since: String(sinceIso || new Date().toISOString()),
+        location: String(location || '')
+      }));
+    } catch (e) {}
+  }
+  function clearWidgetState() {
+    try { localStorage.removeItem(WIDGET_STATE_KEY); } catch (e) {}
+  }
+
+  // Outbox delivery hooks (called from Outbox.reconcile when queued records
+  // land) — refresh both channels so the Field App pill flips without any
+  // reload, even when the delivery happened via a drain.
+  window.onCheckinDelivered = function (result, payload) {
+    var loc = (payload && payload.checkin_location) || (Session.get() || {}).location || '';
+    setWidgetState(result.name, result.checkin_time, loc);
+    notifyHost('checkin', result.name, loc, result.checkin_time);
+  };
+  window.onCheckoutDelivered = function () {
+    clearWidgetState();
+    notifyHost('checkout', (Session.profile.get() || {}).name || '', '', new Date().toISOString());
+  };
+
   function localDatetimeValue(d) {
     var p = function (n) { return (n < 10 ? '0' : '') + n; };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
@@ -348,6 +379,8 @@
       saveProfile(payload);
       enterStatus();
       if (window.updateOutboxBanner) updateOutboxBanner();
+      // Person IS on site — the pill shows immediately for a queued check-in.
+      setWidgetState(payload.name, tsIso, payload.checkin_location);
       notifyHost('checkin', payload.name, payload.checkin_location, tsIso);
       showToast('✓ Check-in saved on this device — it will send when signal returns.');
     });
@@ -394,6 +427,7 @@
         if (window.APP && result.incident) APP.incident = result.incident;
         saveProfile(payload);
         enterStatus();
+        setWidgetState(result.name, result.checkin_time, payload.checkin_location);
         notifyHost('checkin', result.name, payload.checkin_location, result.checkin_time);
       })
       .catch(function (err) {
@@ -507,6 +541,7 @@
     showLoading('Checking out...');
     submitCheckout_(function (queued) {
       var s = Session.get() || {};
+      clearWidgetState();
       notifyHost('checkout', s.name, s.location, new Date().toISOString());
       Session.clear();
       try { Session.profile.set({}); } catch (e) {}
@@ -528,6 +563,7 @@
     }
     document.getElementById('tyCheckinTime').textContent = s.checkin_time ? formatTime(s.checkin_time) : '-';
     document.getElementById('tyCheckoutTime').textContent = formatTime(new Date().toISOString());
+    clearWidgetState();
     notifyHost('checkout', s.name, s.location, new Date().toISOString());
     Session.clear();
     clearInterval(elapsedTimer);
