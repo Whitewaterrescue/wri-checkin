@@ -142,6 +142,58 @@
   // or load — retrying later will help). Everything else terminal.
   var RETRY_CODES = { rate_limited: 1, server_error: 1 };
 
+  // Auth rejections on a QUEUED CHECKOUT (session invalidated between queue
+  // and drain — midnight sweep, pill checkout, token rotation…). Rather than
+  // stranding the record as "failed", fall back to the NAME-BASED staff
+  // checkout — the same open GET the Field App pill uses, so no security
+  // delta. Field-observed 2026-08-10.
+  var AUTH_FAIL_CODES = { bad_token: 1, auth_required: 1, unknown_session: 1 };
+
+  function staffGet_(params) {
+    var qs = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    return fetch(self.CONFIG.API_URL + '?' + qs, { redirect: 'follow' })
+      .then(function (r) { return r.text(); })
+      .then(function (t) {
+        t = t ? t.replace(/^\uFEFF/, '').trim() : '';
+        if (!t || t.charAt(0) !== '{') throw transientErr('Server busy');
+        return JSON.parse(t);
+      });
+  }
+
+  /**
+   * Resolve an auth-failed queued checkout by name. Returns a result object
+   * to mark the record sent, or null to leave it failed.
+   *  - not checked in on the server  -> already out, done
+   *  - checked in SINCE a time NEWER than this record was queued -> the
+   *    session this checkout belonged to is already closed and the person
+   *    deliberately checked in again — do NOT check out the new session
+   *  - otherwise -> name-based checkout (the pill's own path)
+   */
+  function staffCheckoutFallback_(rec) {
+    var name = (rec.payload && rec.payload.name) || '';
+    if (!name && isPage && self.Session && Session.profile) {
+      name = (Session.profile.get() || {}).name || '';
+    }
+    if (!name) return Promise.resolve(null);
+    return staffGet_({ api: 'status', name: name })
+      .then(function (st) {
+        if (!st || !st.success) return null;
+        if (!st.checkedIn) return { checked_out: true, already: true };
+        if (st.since && rec.queued_at &&
+            Date.parse(st.since) > Date.parse(rec.queued_at)) {
+          return { checked_out: true, superseded: true };
+        }
+        return staffGet_({ api: 'checkout', name: name }).then(function (co) {
+          return (co && (co.success || co.checkedIn === false))
+            ? { checked_out: true, fallback: true }
+            : null;
+        });
+      })
+      .catch(function () { return null; });
+  }
+
   var drainActive = false; // fallback when Web Locks is unavailable
   function withDrainLock(fn) {
     if (typeof navigator !== 'undefined' && navigator.locks && navigator.locks.request) {
@@ -242,6 +294,22 @@
               rec.last_error = err;
               summary.stopped = true;
               return putRec(rec); // stop the pass — retry later helps
+            }
+            if (isCheckout(rec) && AUTH_FAIL_CODES[err.code]) {
+              return staffCheckoutFallback_(rec).then(function (outcome) {
+                if (outcome) {
+                  rec.status = 'sent';
+                  rec.result = outcome;
+                  rec.last_error = null;
+                  summary.sent++;
+                  return putRec(rec).then(step);
+                }
+                rec.status = 'failed';
+                rec.needs_pin = false;
+                rec.last_error = err;
+                summary.failed++;
+                return putRec(rec).then(step);
+              });
             }
             // Terminal failure: keep the record (surfaced in the UI, user
             // decides retry/discard). pin_invalid additionally stops the

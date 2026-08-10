@@ -499,6 +499,12 @@
     var creds = Session.get() || {};
     var inc = (window.APP && APP.incident) || {};
     var idemKey = apiUuid();
+    // name+location ride in the payload so the drain's name-based fallback
+    // works even in the service-worker context (no localStorage there).
+    var payload = {
+      name: creds.name || (Session.profile.get() || {}).name || '',
+      location: creds.location || ''
+    };
 
     function queueIt() {
       if (!window.Outbox) { done(false); return; }
@@ -506,7 +512,7 @@
       Outbox.enqueue({
         id: idemKey,
         action: 'staff-checkout',
-        payload: {},
+        payload: payload,
         session: (!pendingId && creds.checkin_id)
           ? { checkin_id: creds.checkin_id, session_token: creds.session_token }
           : null,
@@ -520,7 +526,7 @@
     if (!creds.checkin_id) { done(false); return; }
     if (navigator.onLine === false && window.Outbox) { queueIt(); return; }
 
-    apiPost('staff-checkout', {}, { idempotencyKey: idemKey, maxAttempts: 2 })
+    apiPost('staff-checkout', payload, { idempotencyKey: idemKey, maxAttempts: 2 })
       .then(function () { done(false); })
       .catch(function (err) {
         if (err && err.transient && window.Outbox) { queueIt(); return; }
@@ -641,7 +647,7 @@
         if (r.status === 'failed') {
           rows += '<div style="display:flex;gap:8px;">' +
             '<button class="btn btn-secondary" style="flex:1;padding:8px;" onclick="outboxRetry(\'' + escAttr(r.id) + '\')">Retry</button>' +
-            '<button class="btn btn-danger" style="flex:1;padding:8px;" onclick="outboxDiscard(\'' + escAttr(r.id) + '\')">Discard</button>' +
+            '<button class="btn btn-danger" style="flex:1;padding:8px;" onclick="outboxDiscard(\'' + escAttr(r.id) + '\', this)">Discard</button>' +
             '</div>';
         }
         rows += '</div>';
@@ -667,8 +673,20 @@
     Outbox.retry(id).then(function () { updateOutboxBanner(); });
   };
 
-  window.outboxDiscard = function (id) {
-    if (!confirm('Discard this saved record? It will never be sent.')) return;
+  // Two-tap inline confirm — native confirm() is suppressed inside embedded
+  // iframes (field-observed in the Field App embed; same reason the legacy
+  // check-in deployment was built "no alert/confirm").
+  window.outboxDiscard = function (id, btn) {
+    if (btn && btn.getAttribute('data-armed') !== '1') {
+      btn.setAttribute('data-armed', '1');
+      var orig = btn.textContent;
+      btn.textContent = 'Tap again to discard';
+      setTimeout(function () {
+        btn.setAttribute('data-armed', '');
+        btn.textContent = orig;
+      }, 5000);
+      return;
+    }
     Outbox.discard(id).then(function () {
       hideOutboxDetails();
       updateOutboxBanner();
