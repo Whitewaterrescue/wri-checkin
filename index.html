@@ -43,8 +43,11 @@
         </div>
         <div class="form-group">
           <label for="ciRole">ICS Position</label>
-          <input type="text" id="ciRole" list="roleList" placeholder="Start typing position...">
-          <datalist id="roleList"></datalist>
+          <select id="ciRole">
+            <option value="">Select position…</option>
+            <option value="__other__">Other…</option>
+          </select>
+          <input type="text" id="ciRoleOther" placeholder="Enter position" style="display:none;margin-top:8px;">
         </div>
         <div class="form-group">
           <label for="ciCompany">Company / Organization</label>

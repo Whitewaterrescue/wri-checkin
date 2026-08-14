@@ -171,10 +171,78 @@
     });
   }
 
+  /* ── Position dropdown ──
+     Identical list to the legacy check-in/out app: the ICS Positions tab of
+     the shared workbook, served by ?api=staffrefs. Selection survives refills
+     (snapshot → network); values outside the list land on "Other…". The baked
+     fallback only matters on a first-ever offline open. */
+  var ROLE_FALLBACK = [
+    'Field Technician',
+    'Incident Commander (IC)', 'Deputy Incident Commander', 'Safety Officer (SOFR)',
+    'Asst Safety Officer 1 (ASOFR)', 'Asst Safety Officer 2 (ASOFR)', 'Asst Safety Officer 3 (ASOFR)',
+    'Public Information Officer (PIO)', 'Liaison Officer (LOFR)', 'Intelligence Officer (INTEL)',
+    'Operations Section Chief (OSC)', 'Deputy Operations Section Chief (DOSC)',
+    'Staging Area Manager (STAM)', 'Operations Branch 1 (OB1)', 'Operations Branch 2 (OB2)',
+    'Operations Branch 3 (OB3)', 'Division Supervisor A (DIVS-A)', 'Division Supervisor B (DIVS-B)',
+    'Air Operations Branch (AOBD)',
+    'Planning Section Chief (PSC)', 'Deputy Planning Section Chief (DPSC)',
+    'Situation Unit Leader (SITL)', 'Resource Unit Leader (RESL)',
+    'Documentation Unit Leader (DOCL)', 'Environmental Unit Leader (ENVL)',
+    'Logistics Section Chief (LSC)', 'Deputy Logistics Section Chief (DLSC)',
+    'Communications Unit Leader (COML)', 'Medical Unit Leader (MEDL)',
+    'Supply Unit Leader (SUPL)', 'Facilities Unit Leader (FACL)',
+    'Finance Section Chief (FSC)', 'Time Unit Leader (TIME)',
+    'Procurement Unit Leader (PROC)', 'Cost Unit Leader (COST)'
+  ];
+
+  window.roleGet = function () {
+    var sel = document.getElementById('ciRole');
+    if (!sel) return '';
+    return sel.value === '__other__'
+      ? document.getElementById('ciRoleOther').value.trim()
+      : sel.value;
+  };
+  window.roleSet = function (value) {
+    var sel = document.getElementById('ciRole');
+    var other = document.getElementById('ciRoleOther');
+    if (!sel) return;
+    var v = String(value || '').trim();
+    var match = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === v) { match = true; break; }
+    }
+    if (v && !match) {
+      sel.value = '__other__'; other.value = v; other.style.display = '';
+    } else {
+      sel.value = v; other.style.display = 'none'; other.value = '';
+    }
+  };
+  function fillRoleSelect(values) {
+    var sel = document.getElementById('ciRole');
+    if (!sel || !values || !values.length) return;
+    var current = roleGet();
+    sel.innerHTML = '';
+    function opt(v, label) {
+      var o = document.createElement('option');
+      o.value = v; o.textContent = label || v;
+      sel.appendChild(o);
+    }
+    opt('', 'Select position…');
+    values.forEach(function (v) { opt(v); });
+    opt('__other__', 'Other…');
+    roleSet(current);
+  }
+  document.getElementById('ciRole').addEventListener('change', function () {
+    var other = document.getElementById('ciRoleOther');
+    other.style.display = this.value === '__other__' ? '' : 'none';
+    if (this.value === '__other__') other.focus();
+  });
+  fillRoleSelect(ROLE_FALLBACK);
+
   window.applyRefs = function (refs) {
     if (!refs) return;
     fillDatalist('nameList', refs.names);
-    fillDatalist('roleList', refs.icsPositions);
+    fillRoleSelect(refs.icsPositions);
     fillDatalist('companyList', refs.companies);
     fillDatalist('locationList', refs.locations);
   };
@@ -341,7 +409,7 @@
       if (!p) return;
       if (p.name) document.getElementById('ciName').value = p.name;
       if (p.organization) document.getElementById('ciCompany').value = p.organization;
-      if (p.role) document.getElementById('ciRole').value = p.role;
+      if (p.role) roleSet(p.role);
       if (p.phone) document.getElementById('ciPhone').value = p.phone;
       if (p.email) document.getElementById('ciEmail').value = p.email;
       if (p.location) document.getElementById('ciLocation').value = p.location;
@@ -394,7 +462,7 @@
 
     var payload = {
       name: document.getElementById('ciName').value.trim(),
-      role: document.getElementById('ciRole').value.trim(),
+      role: roleGet(),
       organization: document.getElementById('ciCompany').value.trim(),
       phone: document.getElementById('ciPhone').value.trim(),
       email: document.getElementById('ciEmail').value.trim(),
