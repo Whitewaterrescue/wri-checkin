@@ -217,19 +217,40 @@
       sel.value = v; other.style.display = 'none'; other.value = '';
     }
   };
+  // ICS section groupings. staffrefs strips the sheet's blank divider rows,
+  // but the order is stable — a new section starts at its section chief.
+  // Positions before the first anchor (Field Technician) stay ungrouped.
+  var ROLE_SECTIONS = [
+    { label: 'Command',    re: /^Incident Commander/i },
+    { label: 'Operations', re: /^Operations Section Chief/i },
+    { label: 'Planning',   re: /^Planning Section Chief/i },
+    { label: 'Logistics',  re: /^Logistics Section Chief/i },
+    { label: 'Finance',    re: /^Finance Section Chief/i }
+  ];
   function fillRoleSelect(values) {
     var sel = document.getElementById('ciRole');
     if (!sel || !values || !values.length) return;
     var current = roleGet();
     sel.innerHTML = '';
-    function opt(v, label) {
+    function opt(parent, v, label) {
       var o = document.createElement('option');
       o.value = v; o.textContent = label || v;
-      sel.appendChild(o);
+      parent.appendChild(o);
     }
-    opt('', 'Select position…');
-    values.forEach(function (v) { opt(v); });
-    opt('__other__', 'Other…');
+    opt(sel, '', 'Select position…');
+    var parent = sel;
+    values.forEach(function (v) {
+      for (var i = 0; i < ROLE_SECTIONS.length; i++) {
+        if (ROLE_SECTIONS[i].re.test(v)) {
+          parent = document.createElement('optgroup');
+          parent.label = ROLE_SECTIONS[i].label;
+          sel.appendChild(parent);
+          break;
+        }
+      }
+      opt(parent, v);
+    });
+    opt(sel, '__other__', 'Other…');
     roleSet(current);
   }
   document.getElementById('ciRole').addEventListener('change', function () {
