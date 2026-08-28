@@ -191,6 +191,8 @@
     'Logistics Section Chief (LSC)', 'Deputy Logistics Section Chief (DLSC)',
     'Communications Unit Leader (COML)', 'Medical Unit Leader (MEDL)',
     'Supply Unit Leader (SUPL)', 'Facilities Unit Leader (FACL)',
+    'Food Unit Leader (FDUL)', 'Ground Support Unit Leader (GSUL)',
+    'Vessel Support Unit Leader (VSUL)',
     'Finance Section Chief (FSC)', 'Time Unit Leader (TIME)',
     'Procurement Unit Leader (PROC)', 'Cost Unit Leader (COST)'
   ];
