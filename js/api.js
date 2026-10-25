@@ -111,12 +111,16 @@
         var v = decodeURIComponent(m[1].replace(/\+/g, ' ')).trim();
         if (v) { localStorage.setItem(PIN_KEY, v); return v; }
       }
+      // the phone's incident choice (incident-gate.js, shared with the Field App), then
+      // an older remembered pin
+      var c = JSON.parse(localStorage.getItem('wri_incident_choice') || 'null');
+      if (c && c.id && c.expires > Date.now()) return c.id;
       return localStorage.getItem(PIN_KEY) || '';
     } catch (e) { return ''; }
   }
   window.incidentPin = incidentPin;
   window.incidentPinFromUrl = function () { return /[?&]incident=[^&#]+/.test(location.search); };
-  window.clearIncidentPin = function () { try { localStorage.removeItem(PIN_KEY); } catch (e) {} };
+  window.clearIncidentPin = function () { try { localStorage.removeItem(PIN_KEY); localStorage.removeItem('wri_incident_choice'); } catch (e) {} };
 
   window.apiGet = function (mode, params) {
     var q = Object.assign({ api: mode }, params || {});

@@ -505,6 +505,7 @@
       margin-bottom: 4px;
     }
 
+    .signin-incident .client { font-size: 13px; font-weight: 700; opacity: .8; margin-top: 2px; }
     .signin-incident .name {
       font-size: 1.2rem;
       font-weight: 700;

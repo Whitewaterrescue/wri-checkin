@@ -33,6 +33,15 @@
     var box = document.getElementById('incidentBox');
     if (inc.incident_name && inc.active !== false) {
       document.getElementById('checkinIncidentName').textContent = inc.incident_name;
+      // P3: client + its color so a crew on two incidents can't miss which one this is
+      var code = String(inc.client || '').toLowerCase().replace(/[^a-z]/g, '');
+      var key = code.indexOf('bnsf') > -1 ? 'bnsf' : code === 'up' || code.indexOf('union') > -1 ? 'up'
+        : code.indexOf('mt') > -1 ? 'mtwy' : code.indexOf('wri') > -1 ? 'wri' : '';
+      var COLORS = { bnsf: '#F47A20', up: '#FFC72C', mtwy: '#2E7DD7', wri: '#EC2329' };
+      var LABELS = { bnsf: 'BNSF', up: 'UP', mtwy: 'MT/WY Coop', wri: 'WRI' };
+      var cl = document.getElementById('checkinIncidentClient');
+      if (cl) cl.textContent = LABELS[key] || inc.client || '';
+      box.style.borderLeft = COLORS[key] ? '6px solid ' + COLORS[key] : '';
       box.style.display = '';
     } else {
       box.style.display = 'none';
