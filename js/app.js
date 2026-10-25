@@ -13,6 +13,21 @@
 
   var INC_SNAP_KEY = 'wri_checkin_incident_snapshot';
 
+  // Incident pin (api.js): a snapshot of another incident must not boot this one.
+  function snapFitsPin(inc) {
+    var pin = (window.incidentPin && incidentPin()) || '';
+    if (!pin || !inc) return true;
+    var p = pin.toLowerCase();
+    return String(inc.incident_id || '').toLowerCase() === p || String(inc.recon_project || '').toLowerCase() === p;
+  }
+  // A remembered pin whose incident has closed falls back to the primary; a pin
+  // from the link the user just opened shows "closed" instead.
+  function staleRememberedPin(incident) {
+    if (!incident || !incident.not_open || (window.incidentPinFromUrl && incidentPinFromUrl())) return false;
+    if (window.clearIncidentPin) clearIncidentPin();
+    return true;
+  }
+
   function showIncident() {
     var inc = APP.incident || {};
     var box = document.getElementById('incidentBox');
@@ -103,6 +118,10 @@
 
     apiGet('incident')
       .then(function (incident) {
+        if (staleRememberedPin(incident)) return apiGet('incident');
+        return incident;
+      })
+      .then(function (incident) {
         APP.incident = incident || {};
         try {
           localStorage.setItem(INC_SNAP_KEY, JSON.stringify({ incident: incident, fetched_at: new Date().toISOString() }));
@@ -114,7 +133,7 @@
         // Offline or API unreachable — staff check-in must still work.
         var snap = null;
         try { snap = JSON.parse(localStorage.getItem(INC_SNAP_KEY)); } catch (e) {}
-        APP.incident = (snap && snap.incident) || {};
+        APP.incident = (snap && snap.incident && snapFitsPin(snap.incident)) ? snap.incident : {};
         APP.offline = true;
         showIncident();
         proceed();

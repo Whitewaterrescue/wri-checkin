@@ -98,8 +98,30 @@
     return tryOnce();
   }
 
+  // Incident pin (several incidents open at once). A QR / link with
+  // ?incident=<id or project name> pins this device to that incident: every
+  // read asks the server about it and every write is filed to it. The pin
+  // survives reloads and home-screen launches (localStorage). With no pin the
+  // server uses the primary incident, exactly as before.
+  var PIN_KEY = 'wri_incident_pin';
+  function incidentPin() {
+    try {
+      var m = /[?&]incident=([^&#]+)/.exec(location.search);
+      if (m) {
+        var v = decodeURIComponent(m[1].replace(/\+/g, ' ')).trim();
+        if (v) { localStorage.setItem(PIN_KEY, v); return v; }
+      }
+      return localStorage.getItem(PIN_KEY) || '';
+    } catch (e) { return ''; }
+  }
+  window.incidentPin = incidentPin;
+  window.incidentPinFromUrl = function () { return /[?&]incident=[^&#]+/.test(location.search); };
+  window.clearIncidentPin = function () { try { localStorage.removeItem(PIN_KEY); } catch (e) {} };
+
   window.apiGet = function (mode, params) {
     var q = Object.assign({ api: mode }, params || {});
+    var pin = incidentPin();
+    if (pin && !q.incident) q.incident = pin;
     // attach session creds when present (harmless on open modes)
     var s = window.Session && Session.get();
     if (s && s.checkin_id) { q.cid = s.checkin_id; q.tok = s.session_token; }
@@ -120,6 +142,8 @@
     var s = window.Session && Session.get();
     var env = { action: action, payload: payload || {}, idempotency_key: opts.idempotencyKey || uuid() };
     if (s && s.checkin_id) { env.checkin_id = s.checkin_id; env.session_token = s.session_token; }
+    var pin = incidentPin();
+    if (pin && !env.incident_id) env.incident_id = pin;   // queued drains carry queued_incident_id instead
     var body = JSON.stringify(env); // stable across retries -> server dedupes
     return request(CONFIG.API_URL, function () {
       return {
