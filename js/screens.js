@@ -421,6 +421,7 @@
         role: payload.role || '',
         phone: payload.phone || '',
         email: payload.email || '',
+        home_state: payload.home_state || '',
         location: payload.checkin_location || ''
       });
     } catch (e) {}
@@ -435,6 +436,7 @@
       if (p.role) roleSet(p.role);
       if (p.phone) document.getElementById('ciPhone').value = p.phone;
       if (p.email) document.getElementById('ciEmail').value = p.email;
+      if (p.home_state) document.getElementById('ciState').value = p.home_state;
       if (p.location) document.getElementById('ciLocation').value = p.location;
       if (p.name && p.email) ciTryPrefillCerts();
     } catch (e) {}
@@ -489,6 +491,7 @@
       organization: document.getElementById('ciCompany').value.trim(),
       phone: document.getElementById('ciPhone').value.trim(),
       email: document.getElementById('ciEmail').value.trim(),
+      home_state: document.getElementById('ciState').value.trim(),
       checkin_location: document.getElementById('ciLocation').value.trim(),
       work_description: document.getElementById('ciWorkDesc').value.trim(),
       safety_briefing: document.getElementById('ciSafetyBriefing').checked,
