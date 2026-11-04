@@ -116,6 +116,81 @@
       margin-bottom: 18px;
     }
 
+    /* 2026-11-04 (batch 7): glove-size check-in time + safety ack + confirmation */
+    input[type="datetime-local"].time-input {
+      display: block;
+      width: 100%;
+      min-height: 60px;
+      font-size: 20px;
+      font-weight: 700;
+      padding: 12px 16px;
+      background: var(--input-bg);
+      color: var(--text-bright);
+      border: 2px solid #8a8f90;
+      border-radius: var(--radius-sm);
+      color-scheme: dark;
+      font-family: var(--font);
+      -webkit-appearance: none;
+      appearance: none;
+      text-align: left;
+    }
+    input[type="datetime-local"].time-input::-webkit-date-and-time-value { text-align: left; }
+    input[type="datetime-local"].time-input::-webkit-calendar-picker-indicator {
+      width: 28px; height: 28px; cursor: pointer; filter: invert(1);
+    }
+    input[type="datetime-local"].time-input:focus {
+      border-color: var(--input-focus);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .ack-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-height: 72px;
+      padding: 14px 16px;
+      margin: 8px 0 14px;
+      background: rgba(236, 35, 41, 0.15);
+      border: 2px solid var(--accent);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--text-bright);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ack-row input[type="checkbox"] {
+      width: 34px;
+      height: 34px;
+      flex: none;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .ack-row.ack-done { background: rgba(34, 197, 94, 0.15); border-color: #22c55e; }
+    .ack-row.ack-missing { box-shadow: 0 0 0 4px var(--accent-glow); animation: ackPulse 0.45s 2; }
+    @keyframes ackPulse { 50% { transform: scale(1.02); } }
+
+    .btn.btn-big { min-height: 64px; font-size: 1.15rem; font-weight: 700; }
+
+    .confirm-card {
+      background: rgba(34, 197, 94, 0.12);
+      border: 2px solid #22c55e;
+      border-radius: var(--radius);
+      padding: 18px 16px;
+      margin-bottom: 18px;
+      text-align: center;
+    }
+    .confirm-card.pending { background: rgba(245, 158, 11, 0.12); border-color: #f59e0b; }
+    .confirm-check { font-size: 2.2rem; line-height: 1; color: #22c55e; font-weight: 700; }
+    .confirm-card.pending .confirm-check { color: #f59e0b; }
+    .confirm-title { font-size: 1.35rem; font-weight: 700; color: var(--text-bright); margin-top: 6px; }
+    .confirm-line { font-size: 1.05rem; color: var(--text-bright); margin-top: 8px; line-height: 1.4; }
+    .status-next { margin-bottom: 18px; }
+
     .checkbox-group {
       display: flex;
       align-items: center;
