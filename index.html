@@ -33,10 +33,6 @@
       </div>
 
       <form id="checkinForm" autocomplete="off">
-        <div class="checkbox-group" style="background:rgba(236,35,41,0.15);padding:12px;border-radius:8px;border:1px solid var(--accent);margin-bottom:16px;">
-          <input type="checkbox" id="ciSafetyBriefing" required>
-          <label for="ciSafetyBriefing" style="font-weight:600;">I have received or will receive a safety briefing before beginning work</label>
-        </div>
         <div class="form-group">
           <label for="ciName">Full Name</label>
           <input type="text" id="ciName" list="nameList" placeholder="Start typing your name..." required>
@@ -78,7 +74,7 @@
         </div>
         <div class="form-group">
           <label for="ciTimestamp">Check-In Time</label>
-          <input type="datetime-local" id="ciTimestamp">
+          <input type="datetime-local" id="ciTimestamp" class="time-input">
         </div>
         <div class="checkbox-group" id="ciCertToggleWrap">
           <input type="checkbox" id="ciCertToggle">
@@ -89,7 +85,12 @@
           <div id="ciCertLoading" style="font-size:12px;color:#666;font-style:italic;padding:6px 0">Loading certifications…</div>
           <div id="ciCertList"></div>
         </div>
-        <button type="submit" class="btn btn-primary btn-block" id="checkinBtn">
+        <!-- 2026-11-04 (batch 7): the safety briefing ack is a big, glove-size row right above Check In -->
+        <label class="ack-row" for="ciSafetyBriefing" id="ciSafetyRow">
+          <input type="checkbox" id="ciSafetyBriefing" required>
+          <span>I have received or will receive a safety briefing before beginning work</span>
+        </label>
+        <button type="submit" class="btn btn-primary btn-block btn-big" id="checkinBtn">
           Check In
         </button>
       </form>
@@ -101,6 +102,17 @@
        ═══════════════════════════════════════════════════════ -->
   <div id="screen-status" class="screen">
     <div class="resume-container">
+      <!-- 2026-11-04 (batch 7): a clear "you're checked in" before the Field App moves on -->
+      <div class="confirm-card" id="statusConfirm" role="status" aria-live="polite">
+        <div class="confirm-check" id="statusConfirmIcon">&#10003;</div>
+        <div class="confirm-title" id="statusConfirmTitle">You're checked in</div>
+        <div class="confirm-line" id="statusConfirmLine"></div>
+      </div>
+      <div class="status-next" id="statusNext" style="display:none;">
+        <button type="button" class="btn btn-primary btn-block btn-big" id="statusNextBtn">Go to my checklist</button>
+        <div class="text-muted mt-12" id="statusNextNote"></div>
+        <button type="button" class="link-btn" id="statusStayBtn">Stay on this page</button>
+      </div>
       <div class="resume-avatar" id="statusAvatar">S</div>
       <h2 id="statusWelcome">Checked In</h2>
 
@@ -123,7 +135,7 @@
         </div>
       </div>
 
-      <button class="btn btn-danger btn-block mb-16" onclick="showCheckoutOverlay()">
+      <button class="btn btn-danger btn-block mb-16" id="statusCheckoutBtn" onclick="showCheckoutOverlay()">
         Check Out
       </button>
       <button class="link-btn" onclick="checkOutAndSwitch()">
@@ -165,7 +177,7 @@
       <p>This ends your time on site for today.</p>
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="hideCheckoutOverlay()">Cancel</button>
-        <button class="btn btn-danger" onclick="confirmCheckOut()">Check Out</button>
+        <button class="btn btn-danger" id="confirmCheckoutBtn" onclick="confirmCheckOut()">Check Out</button>
       </div>
     </div>
   </div>

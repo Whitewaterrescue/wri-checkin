@@ -132,6 +132,70 @@
     try { localStorage.removeItem(WIDGET_STATE_KEY); } catch (e) {}
   }
 
+  /* 2026-11-04 (batch 7): the Field App checklist (panels/tasks, same origin) asks
+     for a role under 'wri_role'. Seed it from the ICS position just picked here so
+     the crew isn't asked again. Positions with no checklist match leave it alone;
+     a Field Technician who already picked Boat Operator / Drone Pilot / Water
+     Safety Tech / Tech Manager keeps that pick. */
+  var TASK_ROLE_KEY = 'wri_role';
+  var FIELD_SUBROLES = { boat: 1, drone: 1, water_safety: 1, tech_manager: 1 };
+  window.taskRoleFor = function (ics) {
+    var r = String(ics || '');
+    if (/^field tech/i.test(r)) return 'field';
+    if (/safety officer|\(A?SOFR\)/i.test(r)) return 'safety';
+    if (/air operations|\(AOBD\)/i.test(r)) return 'drone';
+    if (/^(deputy )?incident commander/i.test(r)) return 'pm';
+    if (/operations section chief|group supervisor|task force leader|strike team leader|division supervisor|staging area manager/i.test(r)) return 'supervisor';
+    if (/logistics section chief|\((COML|MEDL|SUPL|FACL|FDUL|GSUL|VSUL)\)/i.test(r)) return 'logistics';
+    if (/planning section chief|\((SITL|RESL|DOCL|ENVL)\)/i.test(r)) return 'admin_sitl';
+    return '';
+  };
+  function seedTaskRole(ics) {
+    var id = taskRoleFor(ics);
+    if (!id) return;
+    try {
+      var cur = localStorage.getItem(TASK_ROLE_KEY) || '';
+      if (id === 'field' && FIELD_SUBROLES[cur]) return;
+      localStorage.setItem(TASK_ROLE_KEY, id);
+    } catch (e) {}
+  }
+
+  /* 2026-11-04 (batch 7): the Field App jumps to its Home page the moment it
+     hears 'checkin', which hid every confirmation. Inside the Field App the
+     message now waits until the crew taps "Go to my checklist" (or a short
+     countdown ends), so "You're checked in" is seen first. The device state
+     (setWidgetState) is still written at once. */
+  var NEXT_SECONDS = 8;
+  var nextTimer = null;
+  function embedded() { try { return window.top !== window; } catch (e) { return true; } }
+  function cancelNext() {
+    if (nextTimer) { clearInterval(nextTimer); nextTimer = null; }
+  }
+  window.armNext = function (name, location, time) {
+    cancelNext();
+    var wrap = document.getElementById('statusNext');
+    if (!embedded()) { notifyHost('checkin', name, location, time); return; }
+    var note = document.getElementById('statusNextNote');
+    var left = NEXT_SECONDS;
+    var sent = false;
+    function send() {
+      if (sent) return;
+      sent = true;
+      cancelNext();
+      wrap.style.display = 'none';
+      notifyHost('checkin', name, location, time);
+    }
+    function tick() { note.textContent = 'Opening your checklist in ' + left + ' s'; }
+    tick();
+    wrap.style.display = '';
+    document.getElementById('statusNextBtn').onclick = send;
+    document.getElementById('statusStayBtn').onclick = function () { cancelNext(); wrap.style.display = 'none'; };
+    nextTimer = setInterval(function () {
+      left--;
+      if (left <= 0) send(); else tick();
+    }, 1000);
+  };
+
   // Outbox delivery hooks (called from Outbox.reconcile when queued records
   // land) — refresh both channels so the Field App pill flips without any
   // reload, even when the delivery happened via a drain.
@@ -470,20 +534,47 @@
         checkin_time: tsIso
       });
       saveProfile(payload);
+      seedTaskRole(payload.role);
       enterStatus();
       if (window.updateOutboxBanner) updateOutboxBanner();
-      // Person IS on site — the pill shows immediately for a queued check-in.
+      // Person IS on site — the pill shows for a queued check-in too.
       setWidgetState(payload.name, tsIso, payload.checkin_location);
-      notifyHost('checkin', payload.name, payload.checkin_location, tsIso);
-      showToast('✓ Check-in saved on this device — it will send when signal returns.');
+      armNext(payload.name, payload.checkin_location, tsIso);
     });
   }
 
+  // 2026-11-04 (batch 7): the safety ack sits right above the button; a missed
+  // tick flashes the row instead of a small browser bubble two screens up.
+  (function () {
+    var box = document.getElementById('ciSafetyBriefing');
+    var row = document.getElementById('ciSafetyRow');
+    if (!box || !row) return;
+    function sync() { row.classList.toggle('ack-done', box.checked); if (box.checked) row.classList.remove('ack-missing'); }
+    box.addEventListener('change', sync);
+    box.addEventListener('invalid', function () {
+      row.classList.remove('ack-missing');
+      void row.offsetWidth;   // restart the pulse
+      row.classList.add('ack-missing');
+      try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    });
+    sync();
+  })();
+
+  var checkinBusy = false;
   document.getElementById('checkinForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    if (checkinBusy) return;   // one tap = one check-in
+    checkinBusy = true;
     var btn = document.getElementById('checkinBtn');
+    function busyText(t) { btn.innerHTML = '<span class="spinner spinner-sm"></span> ' + esc(t); }
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner spinner-sm"></span> Checking in...';
+    btn.setAttribute('aria-busy', 'true');
+    busyText('Checking in...');
+    // progress for a slow reply (cold start / weak signal)
+    var slow = [
+      setTimeout(function () { busyText('Saving your check-in...'); }, 4000),
+      setTimeout(function () { busyText('Still saving (slow signal). Keep this open.'); }, 12000)
+    ];
 
     var payload = {
       name: document.getElementById('ciName').value.trim(),
@@ -502,7 +593,13 @@
     // Key minted at submit time — shared by the direct attempt and any
     // queued record so the server replays instead of double-writing.
     var idemKey = apiUuid();
-    function resetBtn() { btn.disabled = false; btn.textContent = 'Check In'; }
+    function resetBtn() {
+      slow.forEach(clearTimeout);
+      checkinBusy = false;
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+      btn.textContent = 'Check In';
+    }
 
     if (navigator.onLine === false && window.Outbox) {
       resetBtn();
@@ -517,16 +614,26 @@
           showToast('Check-in failed: unexpected server response.', true);
           return;
         }
-        Session.set(Object.assign({}, result, { location: payload.checkin_location }));
+        var keep = Object.assign({}, result, { location: payload.checkin_location });
+        delete keep.timing_ms; delete keep.followup;
+        Session.set(keep);
         if (window.APP && result.incident) APP.incident = result.incident;
         saveProfile(payload);
+        seedTaskRole(result.role || payload.role);
         enterStatus();
         setWidgetState(result.name, result.checkin_time, payload.checkin_location);
-        notifyHost('checkin', result.name, payload.checkin_location, result.checkin_time);
+        armNext(result.name, payload.checkin_location, result.checkin_time);
+        // batch 7: the slow follow-ups (AGOL, logs, autofill) run in a second
+        // request the crew never waits on; the server sweeps any this misses.
+        if (result.followup) {
+          try { apiPost('staff-checkin-followup', {}, { maxAttempts: 1 }).catch(function () {}); } catch (e2) {}
+        }
       })
       .catch(function (err) {
         resetBtn();
-        if (err && err.transient && window.Outbox) {
+        // batch 7: rate_limited here can mean "your first try is still saving";
+        // queue it under the SAME key so it can never write twice.
+        if (err && (err.transient || err.code === 'rate_limited') && window.Outbox) {
           queueCheckin(payload, idemKey);
           return;
         }
@@ -564,6 +671,17 @@
     document.getElementById('statusLocation').textContent = s.location || p.location || '-';
     document.getElementById('statusSince').textContent = s.checkin_time ? formatTime(s.checkin_time) : '-';
     document.getElementById('statusRole').textContent = s.role || '-';
+    // 2026-11-04 (batch 7): "You're checked in to <incident> as <role>, <time>"
+    var inc = s.incident_name ||
+      ((window.APP && APP.incident && APP.incident.active !== false && APP.incident.incident_name) || '');
+    var detail = (inc ? ' to ' + inc : '') + (s.role ? ' as ' + s.role : '') +
+      (s.checkin_time ? ', ' + formatTime(s.checkin_time) : '');
+    document.getElementById('statusConfirm').classList.toggle('pending', !!s.pending);
+    document.getElementById('statusConfirmIcon').innerHTML = s.pending ? '&#8987;' : '&#10003;';
+    document.getElementById('statusConfirmTitle').textContent = s.pending ? 'Saved on this phone' : "You're checked in";
+    document.getElementById('statusConfirmLine').textContent = s.pending
+      ? 'Your check-in' + detail + ' will send when you have signal.'
+      : "You're checked in" + detail + '.';
     updateElapsed();
     clearInterval(elapsedTimer);
     elapsedTimer = setInterval(updateElapsed, 30000);
@@ -628,18 +746,29 @@
       });
   };
 
+  // batch 7: one check-out per tap (the loading overlay is the busy state)
+  var checkoutBusy = false;
   window.confirmCheckOut = function () {
+    if (checkoutBusy) return;
+    checkoutBusy = true;
+    var b = document.getElementById('confirmCheckoutBtn');
+    if (b) b.disabled = true;
     hideCheckoutOverlay();
     showLoading('Checking out...');
     submitCheckout_(function (queued) {
+      checkoutBusy = false;
+      if (b) b.disabled = false;
       hideLoading();
       showThankYou(queued);
     });
   };
 
   window.checkOutAndSwitch = function () {
+    if (checkoutBusy) return;
+    checkoutBusy = true;
     showLoading('Checking out...');
     submitCheckout_(function (queued) {
+      checkoutBusy = false;
       var s = Session.get() || {};
       clearWidgetState();
       notifyHost('checkout', s.name, s.location, new Date().toISOString());
@@ -654,6 +783,7 @@
   };
 
   window.showThankYou = function (queued) {
+    cancelNext();
     var s = Session.get() || {};
     var msg = document.getElementById('tyMessage');
     if (msg) {
@@ -678,7 +808,10 @@
   };
 
   function resetFormForNext() {
+    cancelNext();
     try { document.getElementById('checkinForm').reset(); } catch (e) {}
+    var ack = document.getElementById('ciSafetyRow');
+    if (ack) ack.classList.remove('ack-done', 'ack-missing');
     seedTimestamp();
     document.getElementById('ciCertSection').style.display = 'none';
     document.getElementById('ciCertPrefilledMsg').style.display = 'none';
