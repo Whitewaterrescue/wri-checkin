@@ -85,6 +85,11 @@
           <div id="ciCertLoading" style="font-size:12px;color:#666;font-style:italic;padding:6px 0">Loading certifications…</div>
           <div id="ciCertList"></div>
         </div>
+        <!-- 2026-11-05 (batch 11 Part B): night shift skips the midnight auto check-out (checked out 16 h after check-in instead) -->
+        <label class="ack-row" for="ciNightShift" id="ciNightRow">
+          <input type="checkbox" id="ciNightShift">
+          <span>Night shift (working past midnight: don&rsquo;t check me out at midnight)</span>
+        </label>
         <!-- 2026-11-04 (batch 7): the safety briefing ack is a big, glove-size row right above Check In -->
         <label class="ack-row" for="ciSafetyBriefing" id="ciSafetyRow">
           <input type="checkbox" id="ciSafetyBriefing" required>
@@ -167,6 +172,9 @@
           <span class="stat-value" id="tyCheckoutTime"></span>
         </div>
       </div>
+      <!-- 2026-11-05 (batch 11 Part B): on to the Time Tracker (inside the Field App), where today's on-site time waits to confirm -->
+      <button type="button" class="btn btn-primary btn-block btn-big hidden" id="tyHoursBtn" onclick="openHours(this)">Confirm today&rsquo;s hours</button>
+      <p class="text-muted hidden" id="tyHoursNote" style="font-size:13px;margin-top:6px">Opens the Time Tracker: your on-site time is filled in to check and submit.</p>
 
       <button class="btn btn-secondary btn-block mt-16" onclick="restartApp()">
         Check in
