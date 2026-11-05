@@ -456,7 +456,10 @@
           chain = chain.then(function () {
             var s = (self.Session && Session.get()) || null;
             if (s && s.pending && s.outbox_id === rec.id && rec.result && rec.result.checkin_id) {
-              Session.set(rec.result);
+              // 2026-11-05 (batch 11): keep the picked position + location when the reply leaves them out
+              var real = Object.assign({}, rec.result, { role: rec.result.role || s.role || '', location: rec.result.location || s.location || '' });
+              delete real.timing_ms; delete real.followup;
+              Session.set(real);
               if (self.APP) APP.session = Session.get();
               if (self.showToast) showToast('✓ Check-in delivered — you are checked in.');
             }

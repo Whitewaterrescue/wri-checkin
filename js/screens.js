@@ -119,12 +119,13 @@
   // MOUNTED widget; the localStorage write makes the pill correct on the
   // widget's NEXT mount (covers standalone check-ins and drains that land
   // while the Field App is closed — the widget has no storage listener).
+  // 2026-11-05 (batch 11): + position (the ICS position picked), so Field Forms fills the 214 position from it
   var WIDGET_STATE_KEY = 'wri_checkin_state';
-  function setWidgetState(name, sinceIso, location) {
+  function setWidgetState(name, sinceIso, location, position) {
     try {
       localStorage.setItem(WIDGET_STATE_KEY, JSON.stringify({
         name: String(name || ''), since: String(sinceIso || new Date().toISOString()),
-        location: String(location || '')
+        location: String(location || ''), position: String(position || '')
       }));
     } catch (e) {}
   }
@@ -201,7 +202,7 @@
   // reload, even when the delivery happened via a drain.
   window.onCheckinDelivered = function (result, payload) {
     var loc = (payload && payload.checkin_location) || (Session.get() || {}).location || '';
-    setWidgetState(result.name, result.checkin_time, loc);
+    setWidgetState(result.name, result.checkin_time, loc, result.role || (payload && payload.role) || (Session.get() || {}).role);
     notifyHost('checkin', result.name, loc, result.checkin_time);
   };
   window.onCheckoutDelivered = function () {
@@ -538,7 +539,7 @@
       enterStatus();
       if (window.updateOutboxBanner) updateOutboxBanner();
       // Person IS on site — the pill shows for a queued check-in too.
-      setWidgetState(payload.name, tsIso, payload.checkin_location);
+      setWidgetState(payload.name, tsIso, payload.checkin_location, payload.role);
       armNext(payload.name, payload.checkin_location, tsIso);
     });
   }
@@ -614,14 +615,15 @@
           showToast('Check-in failed: unexpected server response.', true);
           return;
         }
-        var keep = Object.assign({}, result, { location: payload.checkin_location });
+        // 2026-11-05 (batch 11): the position picked, when the reply leaves it out (the card showed "-")
+        var keep = Object.assign({}, result, { location: payload.checkin_location, role: result.role || payload.role || '' });
         delete keep.timing_ms; delete keep.followup;
         Session.set(keep);
         if (window.APP && result.incident) APP.incident = result.incident;
         saveProfile(payload);
-        seedTaskRole(result.role || payload.role);
+        seedTaskRole(keep.role);
         enterStatus();
-        setWidgetState(result.name, result.checkin_time, payload.checkin_location);
+        setWidgetState(result.name, result.checkin_time, payload.checkin_location, keep.role);
         armNext(result.name, payload.checkin_location, result.checkin_time);
         // batch 7: the slow follow-ups (AGOL, logs, autofill) run in a second
         // request the crew never waits on; the server sweeps any this misses.
@@ -670,11 +672,16 @@
       : (s.name || '') + ' — on site';
     document.getElementById('statusLocation').textContent = s.location || p.location || '-';
     document.getElementById('statusSince').textContent = s.checkin_time ? formatTime(s.checkin_time) : '-';
-    document.getElementById('statusRole').textContent = s.role || '-';
+    var role = s.role || (p.name && p.name === s.name ? p.role : '') || '';   // batch 11: the picked position, never "-" when one was picked
+    document.getElementById('statusRole').textContent = role || '-';
+    try {   // a check-in from before batch 11 has no position in the shared state yet
+      var w = JSON.parse(localStorage.getItem(WIDGET_STATE_KEY) || 'null');
+      if (w && role && w.name === s.name && w.position !== role) { w.position = role; localStorage.setItem(WIDGET_STATE_KEY, JSON.stringify(w)); }
+    } catch (e) {}
     // 2026-11-04 (batch 7): "You're checked in to <incident> as <role>, <time>"
     var inc = s.incident_name ||
       ((window.APP && APP.incident && APP.incident.active !== false && APP.incident.incident_name) || '');
-    var detail = (inc ? ' to ' + inc : '') + (s.role ? ' as ' + s.role : '') +
+    var detail = (inc ? ' to ' + inc : '') + (role ? ' as ' + role : '') +
       (s.checkin_time ? ', ' + formatTime(s.checkin_time) : '');
     document.getElementById('statusConfirm').classList.toggle('pending', !!s.pending);
     document.getElementById('statusConfirmIcon').innerHTML = s.pending ? '&#8987;' : '&#10003;';
@@ -698,7 +705,16 @@
   /* ═══════════════════════════════════════════
      CHECK-OUT
      ═══════════════════════════════════════════ */
-  window.showCheckoutOverlay = function () {
+  // mode 'switch' (batch 11): "Check out & sign in as someone else" asks first too
+  var checkoutMode = '';
+  window.showCheckoutOverlay = function (mode) {
+    checkoutMode = mode === 'switch' ? 'switch' : '';
+    var s = Session.get() || {};
+    document.getElementById('checkoutTitle').textContent = checkoutMode ? 'Check out and hand over?' : 'Check Out?';
+    document.getElementById('checkoutMsg').textContent = checkoutMode
+      ? 'This checks ' + (s.name || 'you') + ' out for today, then opens a fresh check-in for the next person.'
+      : 'This ends your time on site for today.';
+    document.getElementById('confirmCheckoutBtn').textContent = checkoutMode ? 'Check out & switch' : 'Check Out';
     document.getElementById('checkoutOverlay').classList.add('active');
   };
   window.hideCheckoutOverlay = function () {
@@ -749,6 +765,7 @@
   // batch 7: one check-out per tap (the loading overlay is the busy state)
   var checkoutBusy = false;
   window.confirmCheckOut = function () {
+    if (checkoutMode === 'switch') { checkoutMode = ''; hideCheckoutOverlay(); checkOutAndSwitch(); return; }
     if (checkoutBusy) return;
     checkoutBusy = true;
     var b = document.getElementById('confirmCheckoutBtn');

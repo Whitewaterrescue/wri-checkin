@@ -657,6 +657,19 @@
       font-weight: 500;
     }
 
+    /* 2026-11-05 (batch 11): Check Out set apart from the status card (a gloved thumb rests just under it) */
+    .checkout-zone {
+      margin-top: 72px;
+      padding-top: 18px;
+      border-top: 1px dashed var(--border);
+    }
+    .checkout-label {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-bottom: 10px;
+    }
+    .checkout-zone .link-btn { min-height: 44px; }
+
     /* ═══════════════════════════════════════════════════════
        RESOURCE UPLOAD SCREEN
        ═══════════════════════════════════════════════════════ */

@@ -135,12 +135,16 @@
         </div>
       </div>
 
-      <button class="btn btn-danger btn-block mb-16" id="statusCheckoutBtn" onclick="showCheckoutOverlay()">
-        Check Out
-      </button>
-      <button class="link-btn" onclick="checkOutAndSwitch()">
-        Check out &amp; sign in as someone else
-      </button>
+      <!-- 2026-11-05 (batch 11): Check Out sat right under the card where a gloved thumb rests; set apart, and both ask first -->
+      <div class="checkout-zone">
+        <div class="checkout-label">Leaving the site?</div>
+        <button class="btn btn-danger btn-block mb-16" id="statusCheckoutBtn" onclick="showCheckoutOverlay()">
+          Check Out
+        </button>
+        <button class="link-btn" id="statusSwitchBtn" onclick="showCheckoutOverlay('switch')">
+          Check out &amp; sign in as someone else
+        </button>
+      </div>
     </div>
   </div>
 
@@ -173,8 +177,8 @@
   <!-- CHECK-OUT CONFIRM OVERLAY -->
   <div id="checkoutOverlay" class="overlay">
     <div class="overlay-card">
-      <h2>Check Out?</h2>
-      <p>This ends your time on site for today.</p>
+      <h2 id="checkoutTitle">Check Out?</h2>
+      <p id="checkoutMsg">This ends your time on site for today.</p>
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="hideCheckoutOverlay()">Cancel</button>
         <button class="btn btn-danger" id="confirmCheckoutBtn" onclick="confirmCheckOut()">Check Out</button>
