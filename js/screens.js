@@ -530,6 +530,7 @@
         organization: payload.organization,
         role: payload.role,
         location: payload.checkin_location,
+        shift: payload.shift || 'day',
         incident_id: inc.incident_id || '',
         incident_name: inc.incident_name || '',
         checkin_time: tsIso
@@ -587,6 +588,7 @@
       checkin_location: document.getElementById('ciLocation').value.trim(),
       work_description: document.getElementById('ciWorkDesc').value.trim(),
       safety_briefing: document.getElementById('ciSafetyBriefing').checked,
+      shift: document.getElementById('ciNightShift').checked ? 'night' : 'day',   // batch 11 Part B
       certifications: document.getElementById('ciCertToggle').checked ? ciGetCheckedCertCodes() : [],
       timestamp: document.getElementById('ciTimestamp').value
     };
@@ -616,7 +618,8 @@
           return;
         }
         // 2026-11-05 (batch 11): the position picked, when the reply leaves it out (the card showed "-")
-        var keep = Object.assign({}, result, { location: payload.checkin_location, role: result.role || payload.role || '' });
+        var keep = Object.assign({}, result, { location: payload.checkin_location, role: result.role || payload.role || '',
+          shift: result.shift || payload.shift || 'day', checkin_time: result.checkin_time || new Date().toISOString() });
         delete keep.timing_ms; delete keep.followup;
         Session.set(keep);
         if (window.APP && result.incident) APP.incident = result.incident;
@@ -682,7 +685,8 @@
     var inc = s.incident_name ||
       ((window.APP && APP.incident && APP.incident.active !== false && APP.incident.incident_name) || '');
     var detail = (inc ? ' to ' + inc : '') + (role ? ' as ' + role : '') +
-      (s.checkin_time ? ', ' + formatTime(s.checkin_time) : '');
+      (s.checkin_time ? ', ' + formatTime(s.checkin_time) : '') +
+      (s.shift === 'night' ? ' (night shift: no midnight check-out)' : '');
     document.getElementById('statusConfirm').classList.toggle('pending', !!s.pending);
     document.getElementById('statusConfirmIcon').innerHTML = s.pending ? '&#8987;' : '&#10003;';
     document.getElementById('statusConfirmTitle').textContent = s.pending ? 'Saved on this phone' : "You're checked in";
@@ -814,7 +818,18 @@
     notifyHost('checkout', s.name, s.location, new Date().toISOString());
     Session.clear();
     clearInterval(elapsedTimer);
+    // the Field App opens its Time Tracker (Forms page); outside the Field App there's nothing to open it in
+    var inApp = window.top !== window;
+    document.getElementById('tyHoursBtn').classList.toggle('hidden', !inApp);
+    document.getElementById('tyHoursNote').classList.toggle('hidden', !inApp);
     showScreen('thankyou');
+  };
+
+  // 2026-11-05 (batch 11 Part B): ask the Field App to open the Time Tracker on its Forms page
+  window.openHours = function (btn) {
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Opening the Time Tracker…';
+    try { window.top.postMessage({ type: 'wri-open-form', name: 'Time Tracker' }, 'https://whitewaterrescue.github.io'); } catch (e) {}
+    setTimeout(function () { btn.disabled = false; btn.textContent = 'Confirm today’s hours'; }, 4000);
   };
 
   window.restartApp = function () {
