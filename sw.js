@@ -13,7 +13,7 @@
  * enter Cache Storage). Cache prefix + sync tag are NAMESPACED because
  * whitewaterrescue.github.io is one origin shared with wri-respond.
  */
-var CACHE_VERSION = '2026-11-04-b7';   // batch 7: fast confirm, glove-size ack + time
+var CACHE_VERSION = '2026-11-05-b11';   // batch 11: position on the card + in wri_checkin_state, Check Out set apart
 var CACHE_NAME = 'wri-checkin-' + CACHE_VERSION;
 
 importScripts('js/config.js', 'js/outbox.js');
