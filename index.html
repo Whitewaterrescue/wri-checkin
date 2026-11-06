@@ -38,8 +38,10 @@
           <input type="text" id="ciName" list="nameList" placeholder="Start typing your name..." required>
           <datalist id="nameList"></datalist>
         </div>
-        <div class="form-group">
+        <!-- 2026-11-06 (batch 13): position required (an empty pick saved no position) -->
+        <div class="form-group" id="ciRoleGroup">
           <label for="ciRole">ICS Position</label>
+          <div class="role-missing-note">Pick your position to check in.</div>
           <select id="ciRole">
             <option value="">Select position…</option>
             <option value="__other__">Other…</option>
@@ -190,6 +192,18 @@
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="hideCheckoutOverlay()">Cancel</button>
         <button class="btn btn-danger" id="confirmCheckoutBtn" onclick="confirmCheckOut()">Check Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2026-11-06 (batch 13): shared phone, a check-in for someone else asks first (in-page: confirm() no-ops in the Field App's frames) -->
+  <div id="switchOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="switchTitle">
+    <div class="overlay-card">
+      <h2 id="switchTitle">Someone is checked in on this phone</h2>
+      <p id="switchMsg"></p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-secondary" id="switchCancelBtn" onclick="hideSwitchOverlay()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="switchConfirmBtn" onclick="confirmSwitch()">Check in</button>
       </div>
     </div>
   </div>

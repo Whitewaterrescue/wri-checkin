@@ -121,11 +121,12 @@
   // while the Field App is closed — the widget has no storage listener).
   // 2026-11-05 (batch 11): + position (the ICS position picked), so Field Forms fills the 214 position from it
   var WIDGET_STATE_KEY = 'wri_checkin_state';
-  function setWidgetState(name, sinceIso, location, position) {
+  // batch 13: + shift, so a night shift still counts as "checked in on this phone" after midnight
+  function setWidgetState(name, sinceIso, location, position, shift) {
     try {
       localStorage.setItem(WIDGET_STATE_KEY, JSON.stringify({
         name: String(name || ''), since: String(sinceIso || new Date().toISOString()),
-        location: String(location || ''), position: String(position || '')
+        location: String(location || ''), position: String(position || ''), shift: shift === 'night' ? 'night' : 'day'
       }));
     } catch (e) {}
   }
@@ -202,7 +203,8 @@
   // reload, even when the delivery happened via a drain.
   window.onCheckinDelivered = function (result, payload) {
     var loc = (payload && payload.checkin_location) || (Session.get() || {}).location || '';
-    setWidgetState(result.name, result.checkin_time, loc, result.role || (payload && payload.role) || (Session.get() || {}).role);
+    setWidgetState(result.name, result.checkin_time, loc, result.role || (payload && payload.role) || (Session.get() || {}).role,
+      result.shift || (payload && payload.shift));
     notifyHost('checkin', result.name, loc, result.checkin_time);
   };
   window.onCheckoutDelivered = function () {
@@ -215,9 +217,35 @@
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
            'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  /* 2026-11-06 (batch 13): the check-in time was the time the PAGE OPENED (opened 9:38, tapped Check In 9:49,
+     saved 9:38), so time on site started early. The field now keeps showing the current time while the form is
+     open, and the time sent is the moment Check In is tapped, unless the crew changed the field themselves. */
+  var tsTimer = null;
   window.seedTimestamp = function () {
     var el = document.getElementById('ciTimestamp');
-    if (el) el.value = localDatetimeValue(new Date());
+    if (!el) return;
+    el.removeAttribute('data-edited');
+    el.value = localDatetimeValue(new Date());
+    clearInterval(tsTimer);
+    tsTimer = setInterval(function () {
+      if (el.getAttribute('data-edited') !== '1' && document.activeElement !== el) el.value = localDatetimeValue(new Date());
+    }, 15000);
+  };
+  (function () {
+    var el = document.getElementById('ciTimestamp');
+    if (!el) return;
+    function mark() { el.setAttribute('data-edited', '1'); }   // only a person's edit fires these
+    el.addEventListener('input', mark);
+    el.addEventListener('change', mark);
+  })();
+  // The record time to send: now, or the time the crew typed in (as an ISO instant, so the server never guesses the zone)
+  window.checkinTimestamp = function () {
+    var el = document.getElementById('ciTimestamp');
+    if (el && el.getAttribute('data-edited') === '1' && el.value) {
+      var t = new Date(el.value);   // datetime-local value = the phone's local time
+      if (!isNaN(t.getTime())) return t.toISOString();
+    }
+    return new Date().toISOString();
   };
 
   /* ═══════════════════════════════════════════
@@ -294,9 +322,15 @@
     { label: 'Logistics',  re: /^Logistics Section Chief/i },
     { label: 'Finance',    re: /^Finance Section Chief/i }
   ];
+  var roleListKey = '';
   function fillRoleSelect(values) {
     var sel = document.getElementById('ciRole');
     if (!sel || !values || !values.length) return;
+    // batch 13: the snapshot and the network list are almost always the same list. Rebuilding it anyway
+    // (innerHTML) a few seconds after the page opens tore down a picker the crew had open, and the pick was lost.
+    var key = values.join('\n');
+    if (key === roleListKey) return;
+    roleListKey = key;
     var current = roleGet();
     sel.innerHTML = '';
     function opt(parent, v, label) {
@@ -324,6 +358,10 @@
     var other = document.getElementById('ciRoleOther');
     other.style.display = this.value === '__other__' ? '' : 'none';
     if (this.value === '__other__') other.focus();
+    if (roleGet()) document.getElementById('ciRoleGroup').classList.remove('role-missing');
+  });
+  document.getElementById('ciRoleOther').addEventListener('input', function () {
+    if (roleGet()) document.getElementById('ciRoleGroup').classList.remove('role-missing');
   });
   fillRoleSelect(ROLE_FALLBACK);
 
@@ -496,13 +534,15 @@
     try {
       var p = Session.profile.get();
       if (!p) return;
-      if (p.name) document.getElementById('ciName').value = p.name;
-      if (p.organization) document.getElementById('ciCompany').value = p.organization;
-      if (p.role) roleSet(p.role);
-      if (p.phone) document.getElementById('ciPhone').value = p.phone;
-      if (p.email) document.getElementById('ciEmail').value = p.email;
-      if (p.home_state) document.getElementById('ciState').value = p.home_state;
-      if (p.location) document.getElementById('ciLocation').value = p.location;
+      // batch 13: fill only what's still empty, so a late prefill never undoes a pick (the position saved as "-")
+      function put(id, v) { var el = document.getElementById(id); if (v && el && !el.value.trim()) el.value = v; }
+      put('ciName', p.name);
+      put('ciCompany', p.organization);
+      if (p.role && !roleGet()) roleSet(p.role);
+      put('ciPhone', p.phone);
+      put('ciEmail', p.email);
+      put('ciState', p.home_state);
+      put('ciLocation', p.location);
       if (p.name && p.email) ciTryPrefillCerts();
     } catch (e) {}
   };
@@ -540,7 +580,7 @@
       enterStatus();
       if (window.updateOutboxBanner) updateOutboxBanner();
       // Person IS on site — the pill shows for a queued check-in too.
-      setWidgetState(payload.name, tsIso, payload.checkin_location, payload.role);
+      setWidgetState(payload.name, tsIso, payload.checkin_location, payload.role, payload.shift);
       armNext(payload.name, payload.checkin_location, tsIso);
     });
   }
@@ -562,11 +602,85 @@
     sync();
   })();
 
+  /* 2026-11-06 (batch 13): the position was optional, so an empty pick went through silently and the check-in
+     saved no position (card "-", 214 / Time Tracker blank). It's now asked for like the safety ack. */
+  function flashRoleMissing() {
+    var g = document.getElementById('ciRoleGroup');
+    g.classList.remove('role-missing');
+    void g.offsetWidth;   // restart the pulse
+    g.classList.add('role-missing');
+    try { g.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    var sel = document.getElementById('ciRole');
+    try { (sel.value === '__other__' ? document.getElementById('ciRoleOther') : sel).focus({ preventScroll: true }); } catch (e) {}
+  }
+
+  /* 2026-11-06 (batch 13): shared phone. A check-in for someone else replaced the person checked in on this phone
+     without a word. Who the phone logs as is wri_checkin_state (Field App, Field Forms, HASP, 214 read it). */
+  function normName(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
+  function localDayOf(t) {
+    var d = new Date(t);
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  // the person this phone logs as, while that check-in is still running (today, or a night shift < 16 h old)
+  window.phoneCheckedIn = function () {
+    try {
+      var w = JSON.parse(localStorage.getItem(WIDGET_STATE_KEY) || 'null');
+      if (!w || !w.name) return null;
+      var t = Date.parse(w.since || '');
+      if (!t) return null;
+      var s = Session.get() || {};
+      var night = w.shift === 'night' || (normName(s.name) === normName(w.name) && s.shift === 'night');
+      var live = localDayOf(t) === localDayOf(Date.now()) || (night && Date.now() - t < 16 * 3600 * 1000);
+      return live ? w : null;
+    } catch (e) { return null; }
+  };
+  var switchPending = null;
+  function askSwitch(oldName, newName, go) {
+    switchPending = go;
+    document.getElementById('switchTitle').textContent = oldName + ' is checked in on this phone';
+    document.getElementById('switchMsg').textContent = 'Check in ' + newName + ' instead? ' + oldName +
+      ' stays checked in on the incident; this phone will log as ' + newName + '.';
+    var b = document.getElementById('switchConfirmBtn');
+    b.disabled = false; b.removeAttribute('aria-busy');
+    b.textContent = 'Check in ' + newName;
+    document.getElementById('switchCancelBtn').disabled = false;
+    document.getElementById('switchOverlay').classList.add('active');
+  }
+  window.hideSwitchOverlay = function () {
+    switchPending = null;
+    document.getElementById('switchOverlay').classList.remove('active');
+  };
+  window.confirmSwitch = function () {
+    var go = switchPending;
+    if (!go) return;
+    switchPending = null;
+    var b = document.getElementById('switchConfirmBtn');
+    b.disabled = true; b.setAttribute('aria-busy', 'true');
+    b.innerHTML = '<span class="spinner spinner-sm"></span> Checking in...';
+    document.getElementById('switchCancelBtn').disabled = true;
+    go(function () { document.getElementById('switchOverlay').classList.remove('active'); });
+  };
+
   var checkinBusy = false;
   document.getElementById('checkinForm').addEventListener('submit', function (e) {
     e.preventDefault();
     if (checkinBusy) return;   // one tap = one check-in
+    if (!roleGet()) { flashRoleMissing(); return; }
+    var newName = document.getElementById('ciName').value.trim();
+    var onPhone = phoneCheckedIn();
+    if (onPhone && normName(onPhone.name) !== normName(newName)) {
+      askSwitch(String(onPhone.name).trim(), newName, sendCheckin);
+      return;
+    }
+    sendCheckin(null);
+  });
+
+  // done (optional): called once the check-in has an answer (the switch dialog closes then)
+  function sendCheckin(done) {
+    if (checkinBusy) return;
     checkinBusy = true;
+    var finished = false;
+    function finish() { if (!finished) { finished = true; if (done) done(); } }
     var btn = document.getElementById('checkinBtn');
     function busyText(t) { btn.innerHTML = '<span class="spinner spinner-sm"></span> ' + esc(t); }
     btn.disabled = true;
@@ -590,7 +704,7 @@
       safety_briefing: document.getElementById('ciSafetyBriefing').checked,
       shift: document.getElementById('ciNightShift').checked ? 'night' : 'day',   // batch 11 Part B
       certifications: document.getElementById('ciCertToggle').checked ? ciGetCheckedCertCodes() : [],
-      timestamp: document.getElementById('ciTimestamp').value
+      timestamp: checkinTimestamp()   // batch 13: the moment Check In is tapped (or the crew's own edit)
     };
 
     // Key minted at submit time — shared by the direct attempt and any
@@ -602,6 +716,7 @@
       btn.disabled = false;
       btn.removeAttribute('aria-busy');
       btn.textContent = 'Check In';
+      finish();
     }
 
     if (navigator.onLine === false && window.Outbox) {
@@ -626,7 +741,7 @@
         saveProfile(payload);
         seedTaskRole(keep.role);
         enterStatus();
-        setWidgetState(result.name, result.checkin_time, payload.checkin_location, keep.role);
+        setWidgetState(result.name, result.checkin_time, payload.checkin_location, keep.role, keep.shift);
         armNext(result.name, payload.checkin_location, result.checkin_time);
         // batch 7: the slow follow-ups (AGOL, logs, autofill) run in a second
         // request the crew never waits on; the server sweeps any this misses.
@@ -644,7 +759,7 @@
         }
         showToast('Check-in error: ' + friendlyError(err), true);
       });
-  });
+  }
 
   document.getElementById('ciCertToggle').addEventListener('change', function () {
     var on = this.checked;

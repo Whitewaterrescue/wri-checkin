@@ -173,6 +173,11 @@
     .ack-row.ack-done { background: rgba(34, 197, 94, 0.15); border-color: #22c55e; }
     .ack-row.ack-missing { box-shadow: 0 0 0 4px var(--accent-glow); animation: ackPulse 0.45s 2; }
     @keyframes ackPulse { 50% { transform: scale(1.02); } }
+    /* batch 13: position required */
+    .role-missing-note { display: none; color: #fca5a5; font-weight: 700; font-size: 0.9rem; margin: 2px 0 6px; }
+    #ciRoleGroup.role-missing .role-missing-note { display: block; }
+    #ciRoleGroup.role-missing select, #ciRoleGroup.role-missing input { box-shadow: 0 0 0 4px var(--accent-glow); border-color: var(--accent); animation: ackPulse 0.45s 2; }
+    #switchOverlay .btn-row .btn { min-height: 52px; }
 
     .btn.btn-big { min-height: 64px; font-size: 1.15rem; font-weight: 700; }
 
