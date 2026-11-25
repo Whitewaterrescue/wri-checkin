@@ -263,6 +263,9 @@
       color: #fff;
     }
     .btn-danger:hover { background: #c0392b; }
+    /* 2026-11-25: Leave this incident. Red, but outlined so it is not mistaken for Check Out. */
+    .btn-danger-outline { background: transparent; color: #ff6b5b; border: 2px solid var(--danger); }
+    .btn-danger-outline:hover { background: rgba(231, 76, 60, 0.15); }
 
     .btn-success {
       background: var(--success);
@@ -674,7 +677,7 @@
       margin-bottom: 10px;
     }
     .checkout-zone .link-btn { min-height: 44px; }
-    .signin-incident .incident-change { display: block; width: 100%; margin-top: 8px; min-height: 44px; padding: 0; text-align: center; }
+    .signin-incident .incident-change { display: block; width: 100%; margin-top: 10px; min-height: 44px; font-size: 15px; }
 
     /* ═══════════════════════════════════════════════════════
        RESOURCE UPLOAD SCREEN

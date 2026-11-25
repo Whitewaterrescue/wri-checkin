@@ -13,7 +13,7 @@
  * enter Cache Storage). Cache prefix + sync tag are NAMESPACED because
  * whitewaterrescue.github.io is one origin shared with wri-respond.
  */
-var CACHE_VERSION = '2026-11-25-leave';   // Leave this incident (wrong incident) + Change incident link
+var CACHE_VERSION = '2026-11-25-leave2';   // Leave this incident (wrong incident) + Change incident link
 var CACHE_NAME = 'wri-checkin-' + CACHE_VERSION;
 
 importScripts('js/config.js', 'js/outbox.js');
