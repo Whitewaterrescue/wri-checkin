@@ -30,6 +30,7 @@
         <div class="label">You are checking in to</div>
         <div class="name" id="checkinIncidentName"></div>
         <div class="client" id="checkinIncidentClient"></div>
+        <button type="button" class="link-btn incident-change" id="incidentChangeBtn" onclick="pickAnotherIncident()">Wrong incident? Change it</button>
       </div>
 
       <form id="checkinForm" autocomplete="off">
@@ -150,6 +151,9 @@
         </button>
         <button class="link-btn" id="statusSwitchBtn" onclick="showCheckoutOverlay('switch')">
           Check out &amp; sign in as someone else
+        </button>
+        <button class="link-btn" id="statusLeaveBtn" onclick="showCheckoutOverlay('leave')">
+          Wrong incident? Leave it and pick another
         </button>
       </div>
     </div>
