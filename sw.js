@@ -13,7 +13,7 @@
  * enter Cache Storage). Cache prefix + sync tag are NAMESPACED because
  * whitewaterrescue.github.io is one origin shared with wri-respond.
  */
-var CACHE_VERSION = '2026-11-25-leave2';   // Leave this incident (wrong incident) + Change incident link
+var CACHE_VERSION = '2026-11-25-reval';   // network fetches revalidate (no 10-min HTTP cache), so updates show on the next open
 var CACHE_NAME = 'wri-checkin-' + CACHE_VERSION;
 
 importScripts('js/config.js', 'js/outbox.js');
@@ -55,7 +55,10 @@ function networkFirst(request) {
   var timeout = new Promise(function (resolve, reject) {
     setTimeout(function () { reject(new Error('sw-timeout')); }, 8000);
   });
-  return Promise.race([fetch(request), timeout])
+  // cache: 'no-cache' = always ask GitHub Pages whether the file changed (a cheap 304 when it
+  // hasn't) instead of trusting the browser's 10-minute copy (Pages sends max-age=600), so a
+  // deploy shows the next time the app opens with signal. Offline still falls back to the cache.
+  return Promise.race([fetch(request, { cache: 'no-cache' }), timeout])
     .then(function (resp) {
       if (resp && resp.ok) {
         var clone = resp.clone();
