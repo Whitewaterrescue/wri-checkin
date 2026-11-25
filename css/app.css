@@ -674,6 +674,7 @@
       margin-bottom: 10px;
     }
     .checkout-zone .link-btn { min-height: 44px; }
+    .signin-incident .incident-change { display: block; width: 100%; margin-top: 8px; min-height: 44px; padding: 0; text-align: center; }
 
     /* ═══════════════════════════════════════════════════════
        RESOURCE UPLOAD SCREEN

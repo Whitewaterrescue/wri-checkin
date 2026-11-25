@@ -825,15 +825,21 @@
      CHECK-OUT
      ═══════════════════════════════════════════ */
   // mode 'switch' (batch 11): "Check out & sign in as someone else" asks first too
+  // mode 'leave' (2026-11-25): wrong incident -> check out of it, then pick the right one
   var checkoutMode = '';
   window.showCheckoutOverlay = function (mode) {
-    checkoutMode = mode === 'switch' ? 'switch' : '';
+    checkoutMode = mode === 'switch' || mode === 'leave' ? mode : '';
     var s = Session.get() || {};
-    document.getElementById('checkoutTitle').textContent = checkoutMode ? 'Check out and hand over?' : 'Check Out?';
-    document.getElementById('checkoutMsg').textContent = checkoutMode
-      ? 'This checks ' + (s.name || 'you') + ' out for today, then opens a fresh check-in for the next person.'
-      : 'This ends your time on site for today.';
-    document.getElementById('confirmCheckoutBtn').textContent = checkoutMode ? 'Check out & switch' : 'Check Out';
+    var incName = ((window.APP && APP.incident) || {}).incident_name || 'this incident';
+    var title = { switch: 'Check out and hand over?', leave: 'Leave ' + incName + '?' }[checkoutMode] || 'Check Out?';
+    var msg = {
+      switch: 'This checks ' + (s.name || 'you') + ' out for today, then opens a fresh check-in for the next person.',
+      leave: 'This checks ' + (s.name || 'you') + ' out of ' + incName + ' and lets you pick the right incident. Then check in again.'
+    }[checkoutMode] || 'This ends your time on site for today.';
+    document.getElementById('checkoutTitle').textContent = title;
+    document.getElementById('checkoutMsg').textContent = msg;
+    document.getElementById('confirmCheckoutBtn').textContent =
+      { switch: 'Check out & switch', leave: 'Leave & pick incident' }[checkoutMode] || 'Check Out';
     document.getElementById('checkoutOverlay').classList.add('active');
   };
   window.hideCheckoutOverlay = function () {
@@ -885,6 +891,7 @@
   var checkoutBusy = false;
   window.confirmCheckOut = function () {
     if (checkoutMode === 'switch') { checkoutMode = ''; hideCheckoutOverlay(); checkOutAndSwitch(); return; }
+    if (checkoutMode === 'leave') { checkoutMode = ''; hideCheckoutOverlay(); checkOutAndLeave(); return; }
     if (checkoutBusy) return;
     checkoutBusy = true;
     var b = document.getElementById('confirmCheckoutBtn');
@@ -916,6 +923,66 @@
       resetFormForNext();
       showScreen('checkin');
     });
+  };
+
+  // Wrong incident: check out of it (same path as Check Out, queues offline),
+  // keep the name/profile, then open the incident picker.
+  window.checkOutAndLeave = function () {
+    if (checkoutBusy) return;
+    checkoutBusy = true;
+    showLoading('Leaving the incident...');
+    submitCheckout_(function (queued) {
+      checkoutBusy = false;
+      var s = Session.get() || {};
+      clearWidgetState();
+      notifyHost('checkout', s.name, s.location, new Date().toISOString());
+      Session.clear();
+      hideLoading();
+      clearInterval(elapsedTimer);
+      if (queued) showToast('✓ Check-out saved — it will send when signal returns.');
+      resetFormForNext();
+      showScreen('checkin');
+      prefillFromProfile();
+      pickAnotherIncident();
+    });
+  };
+
+  // Clear this phone's incident pick (shared with the Field App) and show the
+  // "Which incident are you working today?" picker. The picker lives on the top
+  // page (Field App) when we are embedded, else on this page. Picking an
+  // incident reloads this page onto it. With one open incident there is
+  // nothing to switch to, so say so.
+  window.pickAnotherIncident = function () {
+    var gate = null, topDoc = document;
+    try {
+      if (window.top !== window && window.top.wriIncidentChoice) { gate = window.top.wriIncidentChoice; topDoc = window.top.document; }
+    } catch (e) { gate = null; topDoc = document; }
+    if (!gate && window.wriIncidentChoice) gate = window.wriIncidentChoice;
+    if (navigator.onLine === false || !gate) {
+      showToast('Need signal to change the incident. Try again when you have signal.', true);
+      return;
+    }
+    if (window.clearIncidentPin) clearIncidentPin();
+    try { gate.clear(); } catch (e) {}
+    // a ?incident= link would pin us straight back: drop it before the reload
+    try {
+      if (/[?&]incident=/.test(location.search)) {
+        var u = new URL(location.href); u.searchParams.delete('incident');
+        history.replaceState(null, '', u.pathname + u.search + u.hash);
+      }
+    } catch (e) {}
+    // standalone page: reload once the new pick is made (embedded pages reload on the gate's message)
+    if (gate === window.wriIncidentChoice) {
+      window.addEventListener('wri-incident-choice', function () { location.reload(); }, { once: true });
+    }
+    try { gate.pick(); } catch (e) {}
+    setTimeout(function () {
+      if (topDoc.getElementById('wg-ov')) return;
+      var framedElsewhere = window.top !== window && gate === window.wriIncidentChoice;
+      showToast(framedElsewhere
+        ? 'Open Check In from the Field App to change the incident.'
+        : 'Only one incident is open right now, so there is nothing to switch to. Ask your supervisor if this looks wrong.', true);
+    }, 300);
   };
 
   window.showThankYou = function (queued) {
